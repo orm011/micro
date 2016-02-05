@@ -4,14 +4,16 @@
 #include <cpucounters.h>
 #include <iostream>
 #include <immintrin.h>
+#include <iterator>
 
 //_mm256_stream_si256 
 using namespace std;
+const int k_num_columns = 16;
+const int sizes = (1<<27); 
 
 void
 streams
 (
- size_t num_columns,
  size_t column_size,
  int *__restrict__ * __restrict__ input_data,
  int *__restrict__ results,
@@ -51,109 +53,9 @@ streams
       results[8 + 6] ^= input_data[8 + 6][i]; // gather
 
       results[8 + 7] ^= input_data[8 + 7][i]; // gather
-
-
-      // results[0 + 16] ^= input_data[0 + 16][i]; // gather
-      
-      // results[1 + 16] ^= input_data[1 + 16][i]; // gather
-
-      // results[2 + 16] ^= input_data[2 + 16][i]; // gather
-
-      // results[3 + 16] ^= input_data[3 + 16][i]; // gather
-
-      // results[4 + 16] ^= input_data[4 + 16][i]; // gather
-
-      // results[5 + 16] ^= input_data[5 + 16][i]; // gather
-
-      // results[6 + 16] ^= input_data[6 + 16][i]; // gather
-
-      // results[7 + 16] ^= input_data[7 + 16][i]; // gather
-
-      // results[8 + 0 + 16] ^= input_data[8 + 0 + 16][i]; // gather
-      
-      // results[8 + 1 + 16] ^= input_data[8 + 1 + 16][i]; // gather
-
-      // results[8 + 2 + 16] ^= input_data[8 + 2 + 16][i]; // gather
-
-      // results[8 + 3 + 16] ^= input_data[8 + 3 + 16][i]; // gather
-
-      // results[8 + 4 + 16] ^= input_data[8 + 4 + 16][i]; // gather
-
-      // results[8 + 5 + 16] ^= input_data[8 + 5 + 16][i]; // gather
-
-      // results[8 + 6 + 16] ^= input_data[8 + 6 + 16][i]; // gather
-
-      // results[8 + 7 + 16] ^= input_data[8 + 7 + 16][i]; // gather
-
-
-      // results[32 + 0] ^= input_data[32 + 0][i]; // gather
-      
-      // results[32 + 1] ^= input_data[32+ 1][i]; // gather
-
-      // results[32 + 2] ^= input_data[32+ 2][i]; // gather
-
-      // results[32 + 3] ^= input_data[32+ 3][i]; // gather
-
-      // results[32 + 4] ^= input_data[32+ 4][i]; // gather
-
-      // results[32 + 5] ^= input_data[32+ 5][i]; // gather
-
-      // results[32 + 6] ^= input_data[32+ 6][i]; // gather
-
-      // results[32 + 7] ^= input_data[32+ 7][i]; // gather
-
-      // results[32 + 8 + 0] ^= input_data[32 + 8 + 0][i]; // gather
-      
-      // results[32 + 8 + 1] ^= input_data[32 + 8 + 1][i]; // gather
-
-      // results[32 + 8 + 2] ^= input_data[32 + 8 + 2][i]; // gather
-
-      // results[32 + 8 + 3] ^= input_data[32 + 8 + 3][i]; // gather
-
-      // results[32 + 8 + 4] ^= input_data[32 + 8 + 4][i]; // gather
-
-      // results[32 + 8 + 5] ^= input_data[32 + 8 + 5][i]; // gather
-
-      // results[32 + 8 + 6] ^= input_data[32 + 8 + 6][i]; // gather
-
-      // results[32 + 8 + 7] ^= input_data[32 + 8 + 7][i]; // gather
-
-
-      // results[32 + 0 + 16] ^= input_data[32 + 0 + 16][i]; // gather
-      
-      // results[32 + 1 + 16] ^= input_data[32 + 1 + 16][i]; // gather
-
-      // results[32 + 2 + 16] ^= input_data[32 + 2 + 16][i]; // gather
-
-      // results[32 + 3 + 16] ^= input_data[32 + 3 + 16][i]; // gather
-
-      // results[32 + 4 + 16] ^= input_data[32 + 4 + 16][i]; // gather
-
-      // results[32 + 5 + 16] ^= input_data[32 + 5 + 16][i]; // gather
-
-      // results[32 + 6 + 16] ^= input_data[32 + 6 + 16][i]; // gather
-
-      // results[32 + 7 + 16] ^= input_data[32 + 7 + 16][i]; // gather
-
-      // results[32 + 8 + 0 + 16] ^= input_data[32 + 8 + 0 + 16][i]; // gather
-      
-      // results[32 + 8 + 1 + 16] ^= input_data[32 + 8 + 1 + 16][i]; // gather
-
-      // results[32 + 8 + 2 + 16] ^= input_data[32 + 8 + 2 + 16][i]; // gather
-
-      // results[32 + 8 + 3 + 16] ^= input_data[32 + 8 + 3 + 16][i]; // gather
-
-      // results[32 + 8 + 4 + 16] ^= input_data[32 + 8 + 4 + 16][i]; // gather
-
-      // results[32 + 8 + 5 + 16] ^= input_data[32 + 8 + 5 + 16][i]; // gather
-
-      // results[32 + 8 + 6 + 16] ^= input_data[32 + 8 + 6 + 16][i]; // gather
-
-      // results[32 + 8 + 7 + 16] ^= input_data[32 + 8 + 7 + 16][i]; // gather
-      
   }
   } else {
-    for (size_t arr = 0; arr < num_columns; ++arr) {
+    for (size_t arr = 0; arr < k_num_columns; ++arr) {
       for (size_t i = 0; i < column_size; ++i ) {
 	results[arr] ^= input_data[arr][i]; // gather
       }
@@ -162,24 +64,6 @@ streams
 
   
 }
-
-
-/*
-void serialstreams
-(
- int num_columns,
- size_t column_size,
- const int * __restrict__ * input_data,
- int *__restrict__ * results
-)
-{
-  for (int arr = 0; arr < num_columns, ++arr) {
-  for (int i = 0; i < column_size; ++i ) {
-      results[arr][i] = input_data[arr][i];
-    }
-  }
-}
-*/
 
 void run(benchmark::State & state, int concurrent){
 
@@ -194,15 +78,16 @@ void run(benchmark::State & state, int concurrent){
   size_t total_size_ints = num_vectors * (vector_size_in_ints + cache_line_size_in_ints);
   size_t total_size_bytes = total_size_ints * sizeof(int);
   
-  int * all_cols = (int*)aligned_alloc(64, total_size_bytes);
-  assert(all_cols != nullptr);
-
-  int * start_offset = all_cols;
+  //int * all_cols = (int*)aligned_alloc(64, total_size_bytes);
+  //assert(all_cols != nullptr);
+  //int * start_offset = all_cols;
+  
   for (int i =0; i < num_vectors; ++i) {
-    columns[i] = start_offset;
+    //columns[i] = start_offset;
+    columns[i] = new int[vector_size_in_ints];
     memset(columns[i], 'x', vector_size_in_ints*sizeof(int));
 
-    start_offset += (vector_size_in_ints + cache_line_size_in_ints);
+    //start_offset += (vector_size_in_ints + cache_line_size_in_ints);
   }
 
   // char *p = nullptr;
@@ -243,7 +128,7 @@ void run(benchmark::State & state, int concurrent){
 
 //     SystemCounterState before_sstate = getSystemCounterState();
 //    state.ResumeTiming();
-    streams(state.range_x(), state.range_y(), columns, results, concurrent);
+    streams(state.range_y(), columns, results, concurrent);
     // state.PauseTiming();
 
     // SystemCounterState after_sstate = getSystemCounterState();
@@ -256,7 +141,11 @@ void run(benchmark::State & state, int concurrent){
     // state.ResumeTiming();
   }
 
-  free(all_cols);
+  //free(all_cols);
+  for (int i = 0; i < num_vectors; ++i) {
+    delete[] columns[i];
+  }
+  
   delete[] columns;
   delete[] results;
 }
@@ -269,10 +158,9 @@ static void BM_serial(benchmark::State& state) {
   run(state, 0);
 }
 
-int number = 16;
-int sizes = (1<<27); //+ (number*16); // enough cache lines for staggering
+
 
 // Register the function as a benchmark
-BENCHMARK(BM_serial)->RangePair(number, number, sizes, sizes);
-BENCHMARK(BM_concurrent)->RangePair(number, number, sizes, sizes);
+BENCHMARK(BM_serial)->RangePair(k_num_columns, k_num_columns, sizes, sizes);
+BENCHMARK(BM_concurrent)->RangePair(k_num_columns, k_num_columns, sizes, sizes);
 BENCHMARK_MAIN();
