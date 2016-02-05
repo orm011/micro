@@ -12,6 +12,68 @@ const int k_num_columns = 16;
 const int sizes = (1<<27); 
 
 void
+gather_together(
+ size_t column_size,
+ size_t *__restrict__ gather_positions,
+ int *__restrict__ * __restrict__ input_data,
+ int *__restrict__ * __restrict__ output)
+{
+  for (size_t pos = 0; pos < column_size; ++pos) {
+    size_t gpos = gather_positions[pos];
+    output[0][pos] = input_data[0][gpos];
+    output[1][pos] = input_data[1][gpos];
+  }
+}
+
+void
+gather_separately(
+ size_t column_size,
+ size_t *__restrict__ gather_positions,
+ int *__restrict__ * __restrict__ input_data,
+ int *__restrict__ * __restrict__ output)
+{
+  for (size_t pos = 0; pos < column_size; ++pos) {
+    size_t gpos = gather_positions[pos];
+    output[0][pos] = input_data[0][gpos];
+  }
+
+  for (size_t pos = 0; pos < column_size; ++pos) {
+    size_t gpos = gather_positions[pos];
+    output[1][pos] = input_data[1][gpos];
+  }
+}
+
+
+void
+merge_and_gather(
+ size_t column_size,
+ size_t *__restrict__ gather_positions,
+ int *__restrict__ * __restrict__ input_data,
+ int *__restrict__ * __restrict__ output)
+{
+  struct int_pair {int a; int b;};
+  int_pair * merged = new int_pair[column_size];
+  int_pair * merged_output = new int_pair[column_size];
+  
+  //merge
+  for (size_t pos = 0; pos < column_size; ++pos) {
+    merged[pos].a = input_data[0][pos];
+    merged[pos].b = input_data[1][pos];
+  }
+
+  // gather once
+  for (size_t pos = 0; pos < column_size; ++pos) {
+    merged_output[pos] = merged[gather_positions[pos]];
+  }
+
+  //split
+  for (size_t pos = 0; pos < column_size; ++pos) {
+    output[0][pos] = merged_output[pos].a;
+    output[1][pos] = merged_output[pos].b;
+  }
+}
+
+void
 streams
 (
  size_t column_size,
