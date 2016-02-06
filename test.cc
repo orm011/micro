@@ -10,7 +10,7 @@
 //_mm256_stream_si256 
 using namespace std;
 const int k_num_columns = 2;
-const int k_sizes = (1<<27); 
+const int k_sizes = (1<<30); 
 const int k_check_output = true;
 
 void
@@ -86,46 +86,31 @@ aggregate_series
   }
 }
 
-
 void
 aggregate_interleaved
 (
  size_t column_size,
- int *__restrict__ * __restrict__ input_data,
- int *__restrict__ results
+ int * __restrict__ * __restrict__ input_data,
+ int * __restrict__ results
 )
 {
-  for (size_t i = 0; i < column_size; ++i ) {
-      results[0] ^= input_data[0][i];  
-      
+  for ( size_t i = 0; i < column_size; ++i ) {
+      results[0] ^= input_data[0][i];
       results[1] ^= input_data[1][i];  
-
       results[2] ^= input_data[2][i];  
-
       results[3] ^= input_data[3][i];  
-
       results[4] ^= input_data[4][i];  
-
       results[5] ^= input_data[5][i];  
-
       results[6] ^= input_data[6][i];  
-
       results[7] ^= input_data[7][i];  
 
       results[8 + 0] ^= input_data[8 + 0][i];  
-      
       results[8 + 1] ^= input_data[8 + 1][i];  
-
       results[8 + 2] ^= input_data[8 + 2][i];  
-
       results[8 + 3] ^= input_data[8 + 3][i];  
-
       results[8 + 4] ^= input_data[8 + 4][i];  
-
       results[8 + 5] ^= input_data[8 + 5][i];  
-
       results[8 + 6] ^= input_data[8 + 6][i];  
-
       results[8 + 7] ^= input_data[8 + 7][i];  
   }
 }
