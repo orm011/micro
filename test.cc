@@ -9,7 +9,7 @@
 
 //_mm256_stream_si256 
 using namespace std;
-const int k_num_columns = 2;
+const int k_num_columns = 3;
 const int k_sizes = (1<<30); 
 const int k_check_output = true;
 
@@ -24,7 +24,7 @@ gather_interleaved(
     size_t gpos = gather_positions[pos];
     output[0][pos] = input_data[0][gpos];
     output[1][pos] = input_data[1][gpos];
-    //output[2][pos] = input_data[2][gpos];
+    output[2][pos] = input_data[2][gpos];
   }
 }
 
@@ -45,10 +45,10 @@ gather_series(
     output[1][pos] = input_data[1][gpos];
   }
 
-  // for (size_t pos = 0; pos < column_size; ++pos) {
-  //   size_t gpos = gather_positions[pos];
-  //   output[2][pos] = input_data[2][gpos];
-  // }
+  for (size_t pos = 0; pos < column_size; ++pos) {
+    size_t gpos = gather_positions[pos];
+    output[2][pos] = input_data[2][gpos];
+  }
 }
 
 
@@ -66,7 +66,7 @@ zip_gather_project(
   for (size_t pos = 0; pos < column_size; ++pos) {
     merged[pos].mem[0] = input_data[0][pos];
     merged[pos].mem[1] = input_data[1][pos];
-    // merged[pos].mem[2] = input_data[2][pos];
+    merged[pos].mem[2] = input_data[2][pos];
   }
 
   //gather and project in the same loop
@@ -75,7 +75,7 @@ zip_gather_project(
     
     output[0][pos] = merged[gpos].mem[0];
     output[1][pos] = merged[gpos].mem[1];
-    // output[2][pos] = merged[gpos].mem[2];
+    output[2][pos] = merged[gpos].mem[2];
   }
 }
 
