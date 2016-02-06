@@ -24,6 +24,7 @@ gather_interleaved(
     size_t gpos = gather_positions[pos];
     output[0][pos] = input_data[0][gpos];
     output[1][pos] = input_data[1][gpos];
+    //output[2][pos] = input_data[2][gpos];
   }
 }
 
@@ -43,6 +44,11 @@ gather_series(
     size_t gpos = gather_positions[pos];
     output[1][pos] = input_data[1][gpos];
   }
+
+  // for (size_t pos = 0; pos < column_size; ++pos) {
+  //   size_t gpos = gather_positions[pos];
+  //   output[2][pos] = input_data[2][gpos];
+  // }
 }
 
 
@@ -53,21 +59,23 @@ zip_gather_project(
  int *__restrict__ * __restrict__ input_data,
  int *__restrict__ * __restrict__ output)
 {
-  struct int_pair {int a; int b;};
+  struct int_pair {int mem[k_num_columns]; };
   int_pair * merged = new int_pair[column_size];
   
   //zip and materialize
   for (size_t pos = 0; pos < column_size; ++pos) {
-    merged[pos].a = input_data[0][pos];
-    merged[pos].b = input_data[1][pos];
+    merged[pos].mem[0] = input_data[0][pos];
+    merged[pos].mem[1] = input_data[1][pos];
+    // merged[pos].mem[2] = input_data[2][pos];
   }
 
   //gather and project in the same loop
   for (size_t pos = 0; pos < column_size; ++pos) {
     size_t gpos = gather_positions[pos];
     
-    output[0][pos] = merged[gpos].a;
-    output[1][pos] = merged[gpos].b;
+    output[0][pos] = merged[gpos].mem[0];
+    output[1][pos] = merged[gpos].mem[1];
+    // output[2][pos] = merged[gpos].mem[2];
   }
 }
 
