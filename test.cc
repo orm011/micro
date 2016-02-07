@@ -11,7 +11,7 @@
 using namespace std;
 const int k_num_columns = 3;
 const int k_sizes = (1<<30); 
-const int k_check_output = true;
+const int k_check_output = false;
 
 void
 gather_interleaved(
@@ -138,8 +138,8 @@ template <typename T> void run_full(benchmark::State & state, T func){
     positions[i] = i;
   }
 
-  std::srand(1000);
-  std::random_shuffle(positions, positions + vector_size_in_ints);// WARNING: this may pollute perf counters. (but not timing)
+  //std::srand(1000);
+  //std::random_shuffle(positions, positions + vector_size_in_ints);// WARNING: this may pollute perf counters. (but not timing)
 
   for (int i = 0; i < num_vectors; ++i) {
     columns[i] = new int[vector_size_in_ints];
