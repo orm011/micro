@@ -24,9 +24,9 @@ gather_interleaved(
 {
   for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
     size_t gpos = gather_positions[pos];
-    output[0][pos] = input_data[0][gpos];
-    output[1][pos] = input_data[1][gpos];
-    output[2][pos] = input_data[2][gpos];
+    output[0][pos] = input_data[0][gpos]; // gather first column
+    output[1][pos] = input_data[1][gpos]; // gather second column
+    output[2][pos] = input_data[2][gpos]; // gather third column
   }
 }
 
@@ -35,16 +35,19 @@ gather_series(
  int *__restrict__ * __restrict__ input_data,
  int *__restrict__ * __restrict__ output)
 {
+  //gather first column
   for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
     size_t gpos = gather_positions[pos];
     output[0][pos] = input_data[0][gpos];
   }
 
+  //gather second column
   for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
     size_t gpos = gather_positions[pos];
     output[1][pos] = input_data[1][gpos];
   }
 
+  // gather third column
   for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
     size_t gpos = gather_positions[pos];
     output[2][pos] = input_data[2][gpos];
@@ -60,7 +63,7 @@ zip_gather_project(
   struct int_pair {int mem[k_num_columns]; };
   int_pair * merged = new int_pair[k_fact_table_size];
   
-  //zip and materialize
+  //zip
   for (size_t pos = 0; pos < k_dimension_table_size; ++pos) {
     merged[pos].mem[0] = input_data[0][pos];
     merged[pos].mem[1] = input_data[1][pos];
