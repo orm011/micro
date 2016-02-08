@@ -9,18 +9,20 @@
 
 //_mm256_stream_si256 
 using namespace std;
+const int k_fact_table_size = (1<<30);  // 1 billion entries. 4GB
+const int k_dimension_table_size = (1 << 8); // 32 million entries. 128 MB.
 const int k_num_columns = 3;
-const int k_sizes = (1<<30); 
-const int k_check_output = false;
+const int k_check_output = true;
+
+uint32_t * gather_positions = nullptr;
+uint64_t checksum = 0;
 
 void
 gather_interleaved(
- size_t column_size,
- uint32_t*__restrict__ gather_positions,
  int *__restrict__ * __restrict__ input_data,
  int *__restrict__ * __restrict__ output)
 {
-  for (size_t pos = 0; pos < column_size; ++pos) {
+  for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
     size_t gpos = gather_positions[pos];
     output[0][pos] = input_data[0][gpos];
     output[1][pos] = input_data[1][gpos];
@@ -30,22 +32,20 @@ gather_interleaved(
 
 void
 gather_series(
- size_t column_size,
- uint32_t *__restrict__ gather_positions, // use 32bit ints as offsets
  int *__restrict__ * __restrict__ input_data,
  int *__restrict__ * __restrict__ output)
 {
-  for (size_t pos = 0; pos < column_size; ++pos) {
+  for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
     size_t gpos = gather_positions[pos];
     output[0][pos] = input_data[0][gpos];
   }
 
-  for (size_t pos = 0; pos < column_size; ++pos) {
+  for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
     size_t gpos = gather_positions[pos];
     output[1][pos] = input_data[1][gpos];
   }
 
-  for (size_t pos = 0; pos < column_size; ++pos) {
+  for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
     size_t gpos = gather_positions[pos];
     output[2][pos] = input_data[2][gpos];
   }
@@ -54,23 +54,21 @@ gather_series(
 
 void
 zip_gather_project(
- size_t column_size,
- uint32_t*__restrict__ gather_positions,
  int *__restrict__ * __restrict__ input_data,
  int *__restrict__ * __restrict__ output)
 {
   struct int_pair {int mem[k_num_columns]; };
-  int_pair * merged = new int_pair[column_size];
+  int_pair * merged = new int_pair[k_fact_table_size];
   
   //zip and materialize
-  for (size_t pos = 0; pos < column_size; ++pos) {
+  for (size_t pos = 0; pos < k_dimension_table_size; ++pos) {
     merged[pos].mem[0] = input_data[0][pos];
     merged[pos].mem[1] = input_data[1][pos];
     merged[pos].mem[2] = input_data[2][pos];
   }
 
   //gather and project in the same loop
-  for (size_t pos = 0; pos < column_size; ++pos) {
+  for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
     size_t gpos = gather_positions[pos];
     
     output[0][pos] = merged[gpos].mem[0];
@@ -123,48 +121,60 @@ aggregate_interleaved
   }
 }
 
+uint64_t get_checksum(uint32_t *array, size_t len){
+  uint64_t acc = 0;
+  for (size_t i = 0; i < k_fact_table_size; ++i){
+    acc = (acc * 7) + gather_positions[i];
+  }
+  return acc;
+}
+
+
 template <typename T> void run_full(benchmark::State & state, T func){
-  assert(k_sizes == state.range_y());
-  assert(k_num_columns == state.range_x());
-  
-  const int num_vectors = state.range_x();
-  const size_t vector_size_in_ints = state.range_y();
+  int ** columns = new int*[k_num_columns] {};
+  int ** outputs = new int*[k_num_columns] {};
 
-  int ** columns = new int*[num_vectors] {};
-  int ** outputs = new int*[num_vectors] {};
-  uint32_t * positions =  new uint32_t[vector_size_in_ints];
+  if (!gather_positions) {
+    gather_positions =  new uint32_t[k_fact_table_size];
 
-  for (size_t i = 0; i < vector_size_in_ints; ++i) {
-    positions[i] = i;
+    for (size_t i = 0; i < k_fact_table_size; ++i) {
+      gather_positions[i] = i % (k_dimension_table_size);
+    }
+
+    std::srand(1000);
+    std::random_shuffle(gather_positions, gather_positions + k_fact_table_size);
+    checksum = get_checksum(gather_positions, k_fact_table_size);
   }
 
-  //std::srand(1000);
-  //std::random_shuffle(positions, positions + vector_size_in_ints);// WARNING: this may pollute perf counters. (but not timing)
+  for (int i = 0; i < k_num_columns; ++i) {
+    columns[i] = new int[k_dimension_table_size];
 
-  for (int i = 0; i < num_vectors; ++i) {
-    columns[i] = new int[vector_size_in_ints];
-
-    for (int j = 0; j < vector_size_in_ints; ++j) {
+    for (int j = 0; j < k_dimension_table_size; ++j) {
       columns[i][j] = (i ^ j);
     }
     
-    outputs[i] = new int[vector_size_in_ints];
+    outputs[i] = new int[k_fact_table_size];
   }
 
   while (state.KeepRunning()) {
-    func(state.range_y(), positions, columns, outputs);
+    func(columns, outputs);
   }
 
+  
+
+  int64_t newck = get_checksum(gather_positions, k_fact_table_size);
+  assert(checksum == newck);
+
   if (k_check_output) {
-    for (int i = 0; i < num_vectors; ++i) {
-      for (int j = 0; j < vector_size_in_ints; ++j) {
+    for (int i = 0; i < k_num_columns; ++i) {
+      for (int j = 0; j < k_fact_table_size; ++j) {
 	int original_j = (outputs[i][j] ^ i);
-	assert(positions[j] == original_j);
+	assert(gather_positions[j] == original_j);
       }
     }
   }
   
-  for (int i = 0; i < num_vectors; ++i) {
+  for (int i = 0; i < k_num_columns; ++i) {
     delete[] columns[i];
     delete[] outputs[i];
   }
@@ -175,26 +185,24 @@ template <typename T> void run_full(benchmark::State & state, T func){
 
 template <typename T> void run(benchmark::State & state, T func) {
 
-  const int num_vectors = state.range_x();
-  const size_t vector_size_in_ints = state.range_y();
   //const int cache_line_size_in_ints = 64/(sizeof(int)); // in ints. assuming 64 bytes in cache line.
 
-  int ** columns = new int*[num_vectors] {};
-  int *results = new int[num_vectors] {};
+  int ** columns = new int*[k_num_columns] {};
+  int *results = new int[k_num_columns] {};
 
   // allocate enough space for all vectors, as well as some space to spread them out
-  //size_t total_size_ints = num_vectors * (vector_size_in_ints + cache_line_size_in_ints);
+  //size_t total_size_ints = k_num_columns * (k_fact_table_size + cache_line_size_in_ints);
   //size_t total_size_bytes = total_size_ints * sizeof(int);
   
   //int * all_cols = (int*)aligned_alloc(64, total_size_bytes);
   //assert(all_cols != nullptr);
   //int * start_offset = all_cols;
   
-  for (int i =0; i < num_vectors; ++i) {
+  for (int i =0; i < k_num_columns; ++i) {
     //columns[i] = start_offset;
-    columns[i] = new int[vector_size_in_ints];
-    memset(columns[i], 'x', vector_size_in_ints*sizeof(int));
-    //start_offset += (vector_size_in_ints + cache_line_size_in_ints);
+    columns[i] = new int[k_fact_table_size];
+    memset(columns[i], 'x', k_fact_table_size*sizeof(int));
+    //start_offset += (k_fact_table_size + cache_line_size_in_ints);
   }
 
   while (state.KeepRunning()) {
@@ -202,7 +210,7 @@ template <typename T> void run(benchmark::State & state, T func) {
   }
 
   //free(all_cols);
-  for (int i = 0; i < num_vectors; ++i) {
+  for (int i = 0; i < k_num_columns; ++i) {
     delete[] columns[i];
   }
   
@@ -232,10 +240,10 @@ static void BM_zip_gather_project(benchmark::State& state) {
 
 
 // Register the function as a benchmark
-BENCHMARK(BM_aggregate_series)->ArgPair(k_num_columns, k_sizes);
-BENCHMARK(BM_aggregate_interleaved)->ArgPair(k_num_columns, k_sizes);
-BENCHMARK(BM_gather_series)->ArgPair(k_num_columns, k_sizes);
-BENCHMARK(BM_gather_interleaved)->ArgPair(k_num_columns, k_sizes);
-BENCHMARK(BM_zip_gather_project)->ArgPair(k_num_columns, k_sizes);
+BENCHMARK(BM_aggregate_series);
+BENCHMARK(BM_aggregate_interleaved);
+BENCHMARK(BM_gather_series);
+BENCHMARK(BM_gather_interleaved);
+BENCHMARK(BM_zip_gather_project);
 
 BENCHMARK_MAIN();
