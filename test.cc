@@ -9,8 +9,8 @@
 
 //_mm256_stream_si256 
 using namespace std;
-const int k_fact_table_size = (1<<30);  // 1 billion entries. 4GB
-const int k_dimension_table_size = (1 << 8); // 32 million entries. 128 MB.
+const int k_fact_table_size = (1 << 30);  // 1 billion entries. => 4GB
+const int k_dimension_table_size = (1 << 25); 
 const int k_num_columns = 3;
 const int k_check_output = true;
 
