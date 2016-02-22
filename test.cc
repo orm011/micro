@@ -6,78 +6,95 @@
 #include <immintrin.h>
 #include <iterator>
 #include <algorithm>
+#include <tbb/tbb.h>
 
 //_mm256_stream_si256 
 using namespace std;
-const int k_fact_table_size = (1 << 30);  // 1 billion entries. => 4GB
-const int k_dimension_table_size = (1 << 25); 
-const int k_num_columns = 3;
+const int k_fact_table_size = (1 << 28); 
+const int k_dimension_table_size = (1 << 28); 
+const int k_num_columns = 2;
 const int k_check_output = true;
 
-uint32_t * gather_positions = nullptr;
+const uint32_t * gather_positions = nullptr;
 uint64_t checksum = 0;
 
 void
 gather_interleaved(
  int *__restrict__ * __restrict__ input_data,
- int *__restrict__ * __restrict__ output)
+ int *__restrict__ * __restrict__ output,
+ size_t output_size)
 {
-  for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
-    size_t gpos = gather_positions[pos];
-    output[0][pos] = input_data[0][gpos]; // gather first column
-    output[1][pos] = input_data[1][gpos]; // gather second column
-    output[2][pos] = input_data[2][gpos]; // gather third column
-  }
+	using namespace tbb;
+	parallel_for(blocked_range<size_t>(0, output_size, (1<<10)),
+							 [&](const auto & range){
+								 for (size_t pos = range.begin(); pos < range.end(); ++pos) {
+										 size_t gpos = gather_positions[pos];
+										 output[0][pos] = input_data[0][gpos]; // gather first column
+										 output[1][pos] = input_data[1][gpos]; // gather second column
+										 //output[2][pos] = input_data[2][gpos]; // gather third column
+									 }
+							 });
 }
 
 void
 gather_series(
  int *__restrict__ * __restrict__ input_data,
- int *__restrict__ * __restrict__ output)
+ int *__restrict__ * __restrict__ output,
+ size_t output_size)
 {
-  //gather first column
-  for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
-    size_t gpos = gather_positions[pos];
-    output[0][pos] = input_data[0][gpos];
-  }
+	using namespace tbb;
+	parallel_for(blocked_range<size_t>(0, output_size, (1<<10)),
+							 [&](const auto & range){
+								 for (size_t pos = range.begin(); pos < range.end(); ++pos) {
+									 size_t gpos = gather_positions[pos];
+									 output[0][pos] = input_data[0][gpos];
+								 }
 
-  //gather second column
-  for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
-    size_t gpos = gather_positions[pos];
-    output[1][pos] = input_data[1][gpos];
-  }
+								 for (size_t pos = range.begin(); pos < range.end(); ++pos) {
+									 size_t gpos = gather_positions[pos];
+									 output[1][pos] = input_data[1][gpos];
+								 }
 
-  // gather third column
-  for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
-    size_t gpos = gather_positions[pos];
-    output[2][pos] = input_data[2][gpos];
-  }
+								 // for (size_t pos = range.begin(); pos < range.end(); ++pos) {
+								 // 	 size_t gpos = gather_positions[pos];
+								 // 	 output[2][pos] = input_data[2][gpos];
+								 // }
+							 });
 }
 
 
 void
 zip_gather_project(
  int *__restrict__ * __restrict__ input_data,
- int *__restrict__ * __restrict__ output)
+ int *__restrict__ * __restrict__ output,
+ size_t output_size)
 {
   struct int_pair {int mem[k_num_columns]; };
-  int_pair * merged = new int_pair[k_fact_table_size];
-  
-  // zip
-  for (size_t pos = 0; pos < k_dimension_table_size; ++pos) {
-    merged[pos].mem[0] = input_data[0][pos];
-    merged[pos].mem[1] = input_data[1][pos];
-    merged[pos].mem[2] = input_data[2][pos];
-  }
+  int_pair * dimension_rows = new int_pair[k_dimension_table_size];
 
-  // gather and project in the same loop
-  for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
-    size_t gpos = gather_positions[pos];
-    
-    output[0][pos] = merged[gpos].mem[0];
-    output[1][pos] = merged[gpos].mem[1];
-    output[2][pos] = merged[gpos].mem[2];
-  }
+	using namespace tbb;
+	size_t grain_size = 1<<15;
+	parallel_for(blocked_range<size_t>(0, k_dimension_table_size, grain_size),
+							 [&](const auto &range){
+								 // zip
+								 for (size_t offset = range.begin(); offset != range.end(); ++offset) {
+									 dimension_rows[offset].mem[0] = input_data[0][offset];
+									 dimension_rows[offset].mem[1] = input_data[1][offset];
+									 //dimension_rows[offset].mem[2] = input_data[2][offset];
+								 }
+							 });
+
+
+	parallel_for(blocked_range<size_t>(0, output_size, grain_size),
+							 [&](const auto & range){
+								 // gather and project in the same loo
+								 for (size_t offset = range.begin(); offset != range.end(); ++offset) {
+									 size_t gpos = gather_positions[offset];
+									 output[0][offset] = dimension_rows[gpos].mem[0];
+									 output[1][offset] = dimension_rows[gpos].mem[1];
+									 //output[2][offset] = dimension_rows[gpos].mem[2];
+								 }
+							 });
 }
 
 void
@@ -124,10 +141,10 @@ aggregate_interleaved
   }
 }
 
-uint64_t get_checksum(uint32_t *array, size_t len){
+uint64_t get_checksum(const uint32_t *array, size_t len){
   uint64_t acc = 0;
   for (size_t i = 0; i < k_fact_table_size; ++i){
-    acc = (acc * 7) + gather_positions[i];
+    acc = (acc * 7) + array[i];
   }
   return acc;
 }
@@ -138,15 +155,16 @@ template <typename T> void run_full(benchmark::State & state, T func){
   int ** outputs = new int*[k_num_columns] {};
 
   if (!gather_positions) {
-    gather_positions =  new uint32_t[k_fact_table_size];
+    auto tmp =  new uint32_t[k_fact_table_size];
 
     for (size_t i = 0; i < k_fact_table_size; ++i) {
-      gather_positions[i] = i % (k_dimension_table_size);
+      tmp[i] = i % (k_dimension_table_size);
     }
 
-    // std::srand(1000);
-    // std::random_shuffle(gather_positions, gather_positions + k_fact_table_size);
-    checksum = get_checksum(gather_positions, k_fact_table_size);
+    std::srand(1000);
+    std::random_shuffle(tmp, tmp + k_fact_table_size);
+    checksum = get_checksum(tmp, k_fact_table_size);
+		gather_positions = tmp;
   }
 
   for (int i = 0; i < k_num_columns; ++i) {
@@ -159,20 +177,19 @@ template <typename T> void run_full(benchmark::State & state, T func){
     outputs[i] = new int[k_fact_table_size];
   }
 
-  while (state.KeepRunning()) {
-    func(columns, outputs);
-  }
-
-  
+	while (state.KeepRunning()) {
+			func(columns, outputs, k_fact_table_size);
+	}
 
   int64_t newck = get_checksum(gather_positions, k_fact_table_size);
   assert(checksum == newck);
 
   if (k_check_output) {
+		cout << "checking output" << endl;
     for (int i = 0; i < k_num_columns; ++i) {
       for (int j = 0; j < k_fact_table_size; ++j) {
-	int original_j = (outputs[i][j] ^ i);
-	assert(gather_positions[j] == original_j);
+				int original_j = (outputs[i][j] ^ i);
+				assert(gather_positions[j] == original_j);
       }
     }
   }
