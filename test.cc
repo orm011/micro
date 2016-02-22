@@ -63,14 +63,14 @@ zip_gather_project(
   struct int_pair {int mem[k_num_columns]; };
   int_pair * merged = new int_pair[k_fact_table_size];
   
-  //zip
+  // zip
   for (size_t pos = 0; pos < k_dimension_table_size; ++pos) {
     merged[pos].mem[0] = input_data[0][pos];
     merged[pos].mem[1] = input_data[1][pos];
     merged[pos].mem[2] = input_data[2][pos];
   }
 
-  //gather and project in the same loop
+  // gather and project in the same loop
   for (size_t pos = 0; pos < k_fact_table_size; ++pos) {
     size_t gpos = gather_positions[pos];
     
@@ -144,8 +144,8 @@ template <typename T> void run_full(benchmark::State & state, T func){
       gather_positions[i] = i % (k_dimension_table_size);
     }
 
-    std::srand(1000);
-    std::random_shuffle(gather_positions, gather_positions + k_fact_table_size);
+    // std::srand(1000);
+    // std::random_shuffle(gather_positions, gather_positions + k_fact_table_size);
     checksum = get_checksum(gather_positions, k_fact_table_size);
   }
 
