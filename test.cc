@@ -11,7 +11,7 @@
 //_mm256_stream_si256 
 using namespace std;
 const int k_fact_table_size = (1 << 28); 
-const int k_dimension_table_size = (1 << 28); 
+const int k_dimension_table_size = (1 << 20); 
 const int k_num_columns = 2;
 const int k_check_output = true;
 
@@ -31,7 +31,8 @@ gather_interleaved(
 										 size_t gpos = gather_positions[pos];
 										 output[0][pos] = input_data[0][gpos]; // gather first column
 										 output[1][pos] = input_data[1][gpos]; // gather second column
-										 //output[2][pos] = input_data[2][gpos]; // gather third column
+										 // output[2][pos] = input_data[2][gpos]; // gather third column
+										 // output[3][pos] = input_data[3][gpos]; // gather fourth column
 									 }
 							 });
 }
@@ -50,16 +51,27 @@ gather_series(
 									 output[0][pos] = input_data[0][gpos];
 								 }
 
-								 for (size_t pos = range.begin(); pos < range.end(); ++pos) {
-									 size_t gpos = gather_positions[pos];
-									 output[1][pos] = input_data[1][gpos];
-								 }
-
 								 // for (size_t pos = range.begin(); pos < range.end(); ++pos) {
 								 // 	 size_t gpos = gather_positions[pos];
 								 // 	 output[2][pos] = input_data[2][gpos];
 								 // }
+
+
+								 // for (size_t pos = range.begin(); pos < range.end(); ++pos) {
+								 // 	 size_t gpos = gather_positions[pos];
+								 // 	 output[3][pos] = input_data[3][gpos];
+								 // }
+
 							 });
+
+
+	parallel_for(blocked_range<size_t>(0, output_size, (1<<10)),
+							 [&](const auto & range){
+								 for (size_t pos = range.begin(); pos < range.end(); ++pos) {
+									 size_t gpos = gather_positions[pos];
+									 output[1][pos] = input_data[1][gpos];
+								 }});
+
 }
 
 
@@ -80,7 +92,8 @@ zip_gather_project(
 								 for (size_t offset = range.begin(); offset != range.end(); ++offset) {
 									 dimension_rows[offset].mem[0] = input_data[0][offset];
 									 dimension_rows[offset].mem[1] = input_data[1][offset];
-									 //dimension_rows[offset].mem[2] = input_data[2][offset];
+									 // dimension_rows[offset].mem[2] = input_data[2][offset];
+									 // dimension_rows[offset].mem[3] = input_data[3][offset];
 								 }
 							 });
 
@@ -92,54 +105,12 @@ zip_gather_project(
 									 size_t gpos = gather_positions[offset];
 									 output[0][offset] = dimension_rows[gpos].mem[0];
 									 output[1][offset] = dimension_rows[gpos].mem[1];
-									 //output[2][offset] = dimension_rows[gpos].mem[2];
+									 // output[2][offset] = dimension_rows[gpos].mem[2];
+									 // output[3][offset] = dimension_rows[gpos].mem[3];
 								 }
 							 });
 }
 
-void
-aggregate_series
-(
- size_t column_size,
- int *__restrict__ * __restrict__ input_data,
- int *__restrict__ results
-)
-{
-  for (size_t arr = 0; arr < k_num_columns; ++arr) {
-    for (size_t i = 0; i < column_size; ++i ) {
-      results[arr] ^= input_data[arr][i]; // gather
-    }
-  }
-}
-
-void
-aggregate_interleaved
-(
- size_t column_size,
- int * __restrict__ * __restrict__ input_data,
- int * __restrict__ results
-)
-{
-  for ( size_t i = 0; i < column_size; ++i ) {
-      results[0] ^= input_data[0][i];
-      results[1] ^= input_data[1][i];  
-      results[2] ^= input_data[2][i];  
-      results[3] ^= input_data[3][i];  
-      results[4] ^= input_data[4][i];  
-      results[5] ^= input_data[5][i];  
-      results[6] ^= input_data[6][i];  
-      results[7] ^= input_data[7][i];  
-
-      results[8 + 0] ^= input_data[8 + 0][i];  
-      results[8 + 1] ^= input_data[8 + 1][i];  
-      results[8 + 2] ^= input_data[8 + 2][i];  
-      results[8 + 3] ^= input_data[8 + 3][i];  
-      results[8 + 4] ^= input_data[8 + 4][i];  
-      results[8 + 5] ^= input_data[8 + 5][i];  
-      results[8 + 6] ^= input_data[8 + 6][i];  
-      results[8 + 7] ^= input_data[8 + 7][i];  
-  }
-}
 
 uint64_t get_checksum(const uint32_t *array, size_t len){
   uint64_t acc = 0;
@@ -203,49 +174,6 @@ template <typename T> void run_full(benchmark::State & state, T func){
   delete[] outputs;
 }
 
-template <typename T> void run(benchmark::State & state, T func) {
-
-  //const int cache_line_size_in_ints = 64/(sizeof(int)); // in ints. assuming 64 bytes in cache line.
-
-  int ** columns = new int*[k_num_columns] {};
-  int *results = new int[k_num_columns] {};
-
-  // allocate enough space for all vectors, as well as some space to spread them out
-  //size_t total_size_ints = k_num_columns * (k_fact_table_size + cache_line_size_in_ints);
-  //size_t total_size_bytes = total_size_ints * sizeof(int);
-  
-  //int * all_cols = (int*)aligned_alloc(64, total_size_bytes);
-  //assert(all_cols != nullptr);
-  //int * start_offset = all_cols;
-  
-  for (int i =0; i < k_num_columns; ++i) {
-    //columns[i] = start_offset;
-    columns[i] = new int[k_fact_table_size];
-    memset(columns[i], 'x', k_fact_table_size*sizeof(int));
-    //start_offset += (k_fact_table_size + cache_line_size_in_ints);
-  }
-
-  while (state.KeepRunning()) {
-    func(state.range_y(), columns, results);
-  }
-
-  //free(all_cols);
-  for (int i = 0; i < k_num_columns; ++i) {
-    delete[] columns[i];
-  }
-  
-  delete[] columns;
-  delete[] results;
-}
-
-static void BM_aggregate_interleaved(benchmark::State& state) {
-  run(state, aggregate_interleaved);
-}
-
-static void BM_aggregate_series(benchmark::State& state) {
-  run(state, aggregate_series);
-}
-
 static void BM_gather_series(benchmark::State& state) {
   run_full(state, gather_series);
 }
@@ -260,8 +188,6 @@ static void BM_zip_gather_project(benchmark::State& state) {
 
 
 // Register the function as a benchmark
-BENCHMARK(BM_aggregate_series);
-BENCHMARK(BM_aggregate_interleaved);
 BENCHMARK(BM_gather_series);
 BENCHMARK(BM_gather_interleaved);
 BENCHMARK(BM_zip_gather_project);
